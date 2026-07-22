@@ -1,0 +1,40 @@
+version: 0.0.3
+type: plugin
+author: siyu
+name: text_embedding_vector_client
+label:
+  en_US: Text Embedding Vector Client
+  zh_Hans: Text to Embedding
+description:
+  en_US: Text Embedding Vector Client
+  zh_Hans: 让向量化模型在工作流当中`动态可配置`、`灵活可选`，加入了限制批量能力，防止处理数据量过大导致显存溢出。
+icon: icon.svg
+resource:
+  memory: 268435456
+  permission:
+    tool:
+      enabled: true
+    model:
+      enabled: true
+      llm: false
+      text_embedding: true
+      rerank: false
+      tts: false
+      speech2text: false
+      moderation: false
+plugins:
+  tools:
+    - provider/embedding-client.yaml
+meta:
+  version: 0.0.1
+  arch:
+    - amd64
+    - arm64
+  runner:
+    language: python
+    version: "3.12"
+    entrypoint: main
+  minimum_dify_version: 0.0.1
+created_at: 2025-09-18T11:47:08.1464546+08:00
+privacy: PRIVACY.md
+verified: false

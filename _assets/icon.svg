@@ -1,0 +1,18 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- 圆角矩形背景 -->
+  <rect x="10" y="10" width="180" height="180" rx="40" fill="#f0f8ff" stroke="#87ceeb" stroke-width="4"/>
+
+  <!-- 渐变定义 -->
+  <defs>
+    <linearGradient id="skyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#87ceeb"/>
+      <stop offset="100%" stop-color="#1e90ff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- T2E 渐变文字 -->
+  <text x="50%" y="55%" font-size="72" font-family="Arial, sans-serif"
+        fill="url(#skyGradient)" text-anchor="middle" dominant-baseline="middle" font-weight="bold">
+    T2E
+  </text>
+</svg>

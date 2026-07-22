@@ -1,0 +1,15 @@
+identity:
+  author: "siyu"
+  name: "provider_embedding_client"
+  label:
+    en_US: "Text Embedding Vector Client"
+    zh_Hans: "文本嵌入向量化客户端"
+  icon: "icon.svg"
+  description:
+    en_US: "Text Embedding Vector Client"
+    zh_Hans: "文本嵌入向量化客户端"
+tools:
+  - tools/embedding-client.yaml
+extra:
+  python:
+    source: provider/embedding-client.py

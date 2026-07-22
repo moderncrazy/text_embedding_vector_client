@@ -1,0 +1,52 @@
+identity:
+  name: text_2_vector
+  author: siyu
+  label:
+    en_US: "TEXT_2_VECTOR"
+    zh_Hans: "TEXT_2_VECTOR"
+description:
+  human:
+    en_US: "TEXT_2_VECTOR"
+    zh_Hans: "TEXT_2_VECTOR"
+  llm: "Text Embedding Vector Client"
+
+parameters:
+
+  - name: embedding_model_config
+    type: model-selector
+    scope: text-embedding
+    required: true
+    label:
+      en_US: "Selector Embedding Model"
+      zh_Hans: "选择嵌入模型"
+    form: form
+    llm_description: ""
+    human_description:
+      en_US: "Selector Embedding Model"
+      zh_Hans: "选择嵌入模型"
+
+  - name: input_text
+    type: string
+    required: true
+    label:
+      en_US: "INPUT TEXT"
+      zh_Hans: "输入文本"
+    form: llm
+    human_description:
+      en_US: "INPUT TEXT"
+      zh_Hans: "支持两种输入格式：  1. 普通字符串，例如: 大家好我是小小    2. JSON 字符串数组，例如: [\"大家好我是小小\",\"今天很开心\"]"
+
+  - name: batch_size
+    type: number
+    required: false
+    label:
+      en_US: "BATCH SIZE (Optional)"
+      zh_Hans: "BATCH SIZE (可选)"
+    form: llm
+    human_description:
+      en_US: "default: 10 (Optional)"
+      zh_Hans: "默认：10 (可选)"
+
+extra:
+  python:
+    source: tools/embedding-client.py
