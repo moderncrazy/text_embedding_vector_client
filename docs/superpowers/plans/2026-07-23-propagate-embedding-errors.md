@@ -32,7 +32,7 @@
 Run:
 
 ```bash
-diff -rq /Users/gaoyang/Project/siyu-text_embedding_vector_client_0.0.3 . --exclude=.git --exclude=docs
+diff -rq /Users/gaoyang/Project/siyu-text_embedding_vector_client_0.0.3 . --exclude=.git --exclude=.gitignore --exclude=.superpowers --exclude=docs
 ```
 
 Expected: no output and exit status 0.
