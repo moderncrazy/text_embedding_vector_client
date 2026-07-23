@@ -225,10 +225,10 @@ class PluginReleaseWorkflowTests(unittest.TestCase):
 Run:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_plugin_release.PluginReleaseWorkflowTests -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests/test_plugin_release.py -v
 ```
 
-Expected: four failures with `plugin release workflow must exist`.
+Expected: the three identity tests pass and four workflow tests fail with `plugin release workflow must exist`.
 
 - [ ] **Step 3: Add the tag-driven packaging and Release workflow**
 
