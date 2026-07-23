@@ -48,9 +48,9 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
-          PLUGIN_NAME="$(awk '$1 == "name:" && $0 !~ /^[[:space:]]/ { print $2; exit }' manifest.yaml)"
-          VERSION="$(awk '$1 == "version:" && $0 !~ /^[[:space:]]/ { print $2; exit }' manifest.yaml)"
-          AUTHOR="$(awk '$1 == "author:" && $0 !~ /^[[:space:]]/ { print $2; exit }' manifest.yaml)"
+          PLUGIN_NAME="$(awk '$1 == "name:" && $0 !~ /^[[:space:]]/ { sub(/\r$/, ""); print $2; exit }' manifest.yaml)"
+          VERSION="$(awk '$1 == "version:" && $0 !~ /^[[:space:]]/ { sub(/\r$/, ""); print $2; exit }' manifest.yaml)"
+          AUTHOR="$(awk '$1 == "author:" && $0 !~ /^[[:space:]]/ { sub(/\r$/, ""); print $2; exit }' manifest.yaml)"
           EXPECTED_TAG="v${VERSION}"
 
           if [ -z "$PLUGIN_NAME" ] || [ -z "$VERSION" ] || [ -z "$AUTHOR" ]; then
@@ -111,9 +111,9 @@ jobs:
             exit 1
           fi
 
-          PACKAGED_PLUGIN_NAME="$(awk '$1 == "name:" && $0 !~ /^[[:space:]]/ { print $2; exit }' "$PACKAGED_MANIFEST")"
-          PACKAGED_VERSION="$(awk '$1 == "version:" && $0 !~ /^[[:space:]]/ { print $2; exit }' "$PACKAGED_MANIFEST")"
-          PACKAGED_AUTHOR="$(awk '$1 == "author:" && $0 !~ /^[[:space:]]/ { print $2; exit }' "$PACKAGED_MANIFEST")"
+          PACKAGED_PLUGIN_NAME="$(awk '$1 == "name:" && $0 !~ /^[[:space:]]/ { sub(/\r$/, ""); print $2; exit }' "$PACKAGED_MANIFEST")"
+          PACKAGED_VERSION="$(awk '$1 == "version:" && $0 !~ /^[[:space:]]/ { sub(/\r$/, ""); print $2; exit }' "$PACKAGED_MANIFEST")"
+          PACKAGED_AUTHOR="$(awk '$1 == "author:" && $0 !~ /^[[:space:]]/ { sub(/\r$/, ""); print $2; exit }' "$PACKAGED_MANIFEST")"
 
           if [ "$PACKAGED_PLUGIN_NAME" != "$PLUGIN_NAME" ] || [ "$PACKAGED_VERSION" != "$VERSION" ] || [ "$PACKAGED_AUTHOR" != "$AUTHOR" ]; then
             echo "Packaged manifest does not match the validated source manifest." >&2
@@ -122,13 +122,31 @@ jobs:
 
       - name: Ensure release does not exist
         env:
-          GH_TOKEN: ${{ github.token }}
+          API_URL: ${{ github.api_url }}
+          REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Release $RELEASE_TAG already exists; refusing to overwrite it." >&2
+          if ! HTTP_STATUS="$(curl --silent --show-error --write-out '%{http_code}' --output /dev/null \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/releases/tags/$RELEASE_TAG")"; then
+            echo "Unable to determine whether release $RELEASE_TAG exists." >&2
             exit 1
           fi
+
+          case "$HTTP_STATUS" in
+            200)
+              echo "Release $RELEASE_TAG already exists; refusing to overwrite it." >&2
+              exit 1
+              ;;
+            404)
+              ;;
+            *)
+              echo "Release lookup returned unexpected HTTP status $HTTP_STATUS." >&2
+              exit 1
+              ;;
+          esac
 
       - name: Create GitHub Release
         env:

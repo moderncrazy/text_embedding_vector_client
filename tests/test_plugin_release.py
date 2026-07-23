@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,8 +23,39 @@ class PluginReleaseIdentityTests(unittest.TestCase):
         for path in identity_files:
             with self.subTest(path=path.relative_to(ROOT)):
                 content = path.read_text(encoding="utf-8")
-                self.assertRegex(content, r"(?m)^\s*author: moderncrazy$")
+                authors = [
+                    line.split(":", 1)[1].strip()
+                    for line in content.splitlines()
+                    if line.lstrip().startswith("author:")
+                ]
+                self.assertEqual(authors, ["moderncrazy"])
                 self.assertNotIn("siyu", content.lower())
+
+    def test_release_identity_files_are_lf_normalized(self):
+        normalized_files = [
+            ROOT / "manifest.yaml",
+            ROOT / "provider/embedding-client.yaml",
+            ROOT / "tools/embedding-client.yaml",
+            ROOT / ".difyignore",
+        ]
+
+        for path in normalized_files:
+            with self.subTest(path=path.relative_to(ROOT)):
+                self.assertNotIn(b"\r", path.read_bytes())
+
+    def test_source_manifest_awk_derives_byte_exact_package_name(self):
+        package_name = subprocess.check_output(
+            [
+                "sh",
+                "-c",
+                'PLUGIN_NAME="$(awk \'$1 == "name:" && $0 !~ /^[[:space:]]/ { print $2; exit }\' manifest.yaml)"; '
+                'VERSION="$(awk \'$1 == "version:" && $0 !~ /^[[:space:]]/ { print $2; exit }\' manifest.yaml)"; '
+                'printf "%s" "${PLUGIN_NAME}-${VERSION}.difypkg"',
+            ],
+            cwd=ROOT,
+        )
+
+        self.assertEqual(package_name, b"text_embedding_vector_client-0.0.4.difypkg")
 
     def test_package_excludes_git_metadata_in_directories_and_worktrees(self):
         ignored_entries = {
@@ -66,10 +98,11 @@ class PluginReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('EXPECTED_TAG="v${VERSION}"', workflow)
         self.assertIn('$1 == "name:" && $0 !~ /^[[:space:]]/', workflow)
         self.assertIn('$1 == "author:" && $0 !~ /^[[:space:]]/', workflow)
+        self.assertGreaterEqual(workflow.count("sub(/\\r$/, \"\")"), 6)
         self.assertIn('[ "$AUTHOR" != "moderncrazy" ]', workflow)
         self.assertIn('echo "author=$AUTHOR" >> "$GITHUB_OUTPUT"', workflow)
 
-    def test_workflow_rejects_invalid_or_existing_release(self):
+    def test_workflow_checks_package_safety_before_release_creation(self):
         workflow = self.workflow()
 
         self.assertIn('unzip -Z1 "$PACKAGE_NAME" > "$ARCHIVE_LIST"', workflow)
@@ -84,8 +117,36 @@ class PluginReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('[ "$PACKAGED_PLUGIN_NAME" != "$PLUGIN_NAME" ]', workflow)
         self.assertIn('[ "$PACKAGED_VERSION" != "$VERSION" ]', workflow)
         self.assertIn('[ "$PACKAGED_AUTHOR" != "$AUTHOR" ]', workflow)
-        self.assertLess(workflow.index("gh release view"), workflow.index("gh release create"))
+        package = workflow.index('"$RUNNER_TEMP/bin/dify-plugin" plugin package')
+        integrity = workflow.index('unzip -t "$PACKAGE_NAME"')
+        archive_listing = workflow.index('unzip -Z1 "$PACKAGE_NAME"')
+        git_rejection = workflow.index("Package contains Git metadata")
+        packaged_manifest = workflow.index('unzip -p "$PACKAGE_NAME" manifest.yaml')
+        comparison = workflow.index("Packaged manifest does not match")
+        release_lookup = workflow.index("curl --silent --show-error --write-out")
+        release_creation = workflow.index("gh release create")
+        self.assertLess(package, integrity)
+        self.assertLess(integrity, archive_listing)
+        self.assertLess(archive_listing, git_rejection)
+        self.assertLess(git_rejection, packaged_manifest)
+        self.assertLess(packaged_manifest, comparison)
+        self.assertLess(comparison, release_lookup)
+        self.assertLess(release_lookup, release_creation)
         self.assertIn("--verify-tag", workflow)
+
+    def test_workflow_release_lookup_fails_closed(self):
+        workflow = self.workflow()
+
+        self.assertIn("API_URL: ${{ github.api_url }}", workflow)
+        self.assertIn("REPOSITORY: ${{ github.repository }}", workflow)
+        self.assertIn("GITHUB_TOKEN: ${{ github.token }}", workflow)
+        self.assertIn('"$API_URL/repos/$REPOSITORY/releases/tags/$RELEASE_TAG"', workflow)
+        self.assertIn('HTTP_STATUS="$(curl --silent --show-error --write-out \'%{http_code}\' --output /dev/null', workflow)
+        self.assertIn('case "$HTTP_STATUS" in', workflow)
+        self.assertIn('200)', workflow)
+        self.assertIn('404)', workflow)
+        self.assertIn('*)', workflow)
+        self.assertNotIn("gh release view", workflow)
 
     def test_workflow_creates_expected_release(self):
         workflow = self.workflow()
