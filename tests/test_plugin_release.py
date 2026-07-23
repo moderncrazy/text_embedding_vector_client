@@ -1,9 +1,41 @@
 import unittest
 from pathlib import Path
+import re
 import subprocess
+import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def author_values(content):
+    return [
+        value.strip()
+        for value in re.findall(r"(?m)^[ \t]*author:[ \t]*([^\r\n]*)$", content)
+    ]
+
+
+def top_level_author_values(content):
+    return [
+        value.strip()
+        for value in re.findall(r"(?m)^author:[ \t]*([^\r\n]*)$", content)
+    ]
+
+
+def identity_author_values(content):
+    identity_block = re.search(
+        r"(?m)^identity:\r?\n((?:^(?:  |\t).*(?:\r?\n|$))*)",
+        content,
+    )
+    if identity_block is None:
+        return []
+
+    return [
+        value.strip()
+        for value in re.findall(
+            r"(?m)^  author:[ \t]*([^\r\n]*)$", identity_block.group(1)
+        )
+    ]
 
 
 class PluginReleaseIdentityTests(unittest.TestCase):
@@ -14,22 +46,35 @@ class PluginReleaseIdentityTests(unittest.TestCase):
         self.assertRegex(manifest, r"(?m)^  version: 0\.0\.1$")
 
     def test_all_plugin_identity_authors_are_moderncrazy(self):
+        manifest = (ROOT / "manifest.yaml").read_text(encoding="utf-8")
+        self.assertEqual(author_values(manifest), ["moderncrazy"])
+        self.assertEqual(top_level_author_values(manifest), ["moderncrazy"])
+
         identity_files = [
-            ROOT / "manifest.yaml",
+            ROOT / "provider/embedding-client.yaml",
+            ROOT / "tools/embedding-client.yaml",
+        ]
+        for path in identity_files:
+            with self.subTest(path=path.relative_to(ROOT)):
+                content = path.read_text(encoding="utf-8")
+                self.assertEqual(author_values(content), ["moderncrazy"])
+                self.assertEqual(identity_author_values(content), ["moderncrazy"])
+                self.assertNotIn("siyu", content.lower())
+
+    def test_author_location_rejects_moved_identity_author(self):
+        identity_files = [
             ROOT / "provider/embedding-client.yaml",
             ROOT / "tools/embedding-client.yaml",
         ]
 
         for path in identity_files:
             with self.subTest(path=path.relative_to(ROOT)):
-                content = path.read_text(encoding="utf-8")
-                authors = [
-                    line.split(":", 1)[1].strip()
-                    for line in content.splitlines()
-                    if line.lstrip().startswith("author:")
-                ]
-                self.assertEqual(authors, ["moderncrazy"])
-                self.assertNotIn("siyu", content.lower())
+                moved_author = path.read_text(encoding="utf-8").replace(
+                    "  author: moderncrazy",
+                    "author: moderncrazy",
+                    1,
+                )
+                self.assertEqual(identity_author_values(moved_author), [])
 
     def test_release_identity_files_are_lf_normalized(self):
         normalized_files = [
@@ -54,6 +99,28 @@ class PluginReleaseIdentityTests(unittest.TestCase):
             ],
             cwd=ROOT,
         )
+
+        self.assertEqual(package_name, b"text_embedding_vector_client-0.0.4.difypkg")
+
+    def test_crlf_manifest_awk_derives_byte_exact_package_name(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            fixture = Path(temporary_directory) / "manifest.yaml"
+            fixture.write_bytes(
+                b"version: 0.0.4\r\n"
+                b"author: moderncrazy\r\n"
+                b"name: text_embedding_vector_client\r\n"
+            )
+            package_name = subprocess.check_output(
+                [
+                    "sh",
+                    "-c",
+                    'PLUGIN_NAME="$(awk \'$1 == "name:" && $0 !~ /^[[:space:]]/ { sub(/\\r$/, ""); print $2; exit }\' "$1")"; '
+                    'VERSION="$(awk \'$1 == "version:" && $0 !~ /^[[:space:]]/ { sub(/\\r$/, ""); print $2; exit }\' "$1")"; '
+                    'printf "%s" "${PLUGIN_NAME}-${VERSION}.difypkg"',
+                    "sh",
+                    str(fixture),
+                ]
+            )
 
         self.assertEqual(package_name, b"text_embedding_vector_client-0.0.4.difypkg")
 
