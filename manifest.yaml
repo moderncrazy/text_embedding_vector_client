@@ -1,6 +1,6 @@
-version: 0.0.3
+version: 0.0.4
 type: plugin
-author: siyu
+author: moderncrazy
 name: text_embedding_vector_client
 label:
   en_US: Text Embedding Vector Client

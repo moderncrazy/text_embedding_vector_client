@@ -1,6 +1,6 @@
 identity:
   name: text_2_vector
-  author: siyu
+  author: moderncrazy
   label:
     en_US: "TEXT_2_VECTOR"
     zh_Hans: "TEXT_2_VECTOR"

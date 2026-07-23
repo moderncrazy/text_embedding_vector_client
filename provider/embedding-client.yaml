@@ -1,5 +1,5 @@
 identity:
-  author: "siyu"
+  author: moderncrazy
   name: "provider_embedding_client"
   label:
     en_US: "Text Embedding Vector Client"
