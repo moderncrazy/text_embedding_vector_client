@@ -65,13 +65,25 @@ class PluginReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("package_name=${PLUGIN_NAME}-${VERSION}.difypkg", workflow)
         self.assertIn('EXPECTED_TAG="v${VERSION}"', workflow)
         self.assertIn('$1 == "name:" && $0 !~ /^[[:space:]]/', workflow)
+        self.assertIn('$1 == "author:" && $0 !~ /^[[:space:]]/', workflow)
+        self.assertIn('[ "$AUTHOR" != "moderncrazy" ]', workflow)
+        self.assertIn('echo "author=$AUTHOR" >> "$GITHUB_OUTPUT"', workflow)
 
     def test_workflow_rejects_invalid_or_existing_release(self):
         workflow = self.workflow()
 
         self.assertIn('unzip -Z1 "$PACKAGE_NAME" > "$ARCHIVE_LIST"', workflow)
+        self.assertIn('unzip -t "$PACKAGE_NAME"', workflow)
+        self.assertIn('unzip -p "$PACKAGE_NAME" manifest.yaml > "$PACKAGED_MANIFEST"', workflow)
         self.assertIn("grep -Eq", workflow)
         self.assertIn("git metadata", workflow.lower())
+        self.assertIn('PACKAGE_NAME: ${{ steps.manifest.outputs.package_name }}', workflow)
+        self.assertIn('PLUGIN_NAME: ${{ steps.manifest.outputs.plugin_name }}', workflow)
+        self.assertIn('VERSION: ${{ steps.manifest.outputs.version }}', workflow)
+        self.assertIn('AUTHOR: ${{ steps.manifest.outputs.author }}', workflow)
+        self.assertIn('[ "$PACKAGED_PLUGIN_NAME" != "$PLUGIN_NAME" ]', workflow)
+        self.assertIn('[ "$PACKAGED_VERSION" != "$VERSION" ]', workflow)
+        self.assertIn('[ "$PACKAGED_AUTHOR" != "$AUTHOR" ]', workflow)
         self.assertLess(workflow.index("gh release view"), workflow.index("gh release create"))
         self.assertIn("--verify-tag", workflow)
 

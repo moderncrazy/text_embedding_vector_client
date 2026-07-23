@@ -50,10 +50,16 @@ jobs:
         run: |
           PLUGIN_NAME="$(awk '$1 == "name:" && $0 !~ /^[[:space:]]/ { print $2; exit }' manifest.yaml)"
           VERSION="$(awk '$1 == "version:" && $0 !~ /^[[:space:]]/ { print $2; exit }' manifest.yaml)"
+          AUTHOR="$(awk '$1 == "author:" && $0 !~ /^[[:space:]]/ { print $2; exit }' manifest.yaml)"
           EXPECTED_TAG="v${VERSION}"
 
-          if [ -z "$PLUGIN_NAME" ] || [ -z "$VERSION" ]; then
-            echo "Unable to read plugin name or version from manifest.yaml." >&2
+          if [ -z "$PLUGIN_NAME" ] || [ -z "$VERSION" ] || [ -z "$AUTHOR" ]; then
+            echo "Unable to read plugin name, version, or author from manifest.yaml." >&2
+            exit 1
+          fi
+
+          if [ "$AUTHOR" != "moderncrazy" ]; then
+            echo "Plugin author must be moderncrazy." >&2
             exit 1
           fi
 
@@ -64,6 +70,7 @@ jobs:
 
           echo "plugin_name=$PLUGIN_NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "author=$AUTHOR" >> "$GITHUB_OUTPUT"
           echo "package_name=${PLUGIN_NAME}-${VERSION}.difypkg" >> "$GITHUB_OUTPUT"
 
       - name: Download Dify plugin CLI
@@ -78,15 +85,38 @@ jobs:
       - name: Package plugin
         env:
           PACKAGE_NAME: ${{ steps.manifest.outputs.package_name }}
+          PLUGIN_NAME: ${{ steps.manifest.outputs.plugin_name }}
+          VERSION: ${{ steps.manifest.outputs.version }}
+          AUTHOR: ${{ steps.manifest.outputs.author }}
         run: |
           "$RUNNER_TEMP/bin/dify-plugin" plugin package . -o "$PACKAGE_NAME"
           test -s "$PACKAGE_NAME"
+
+          if ! unzip -t "$PACKAGE_NAME"; then
+            echo "Package archive integrity check failed." >&2
+            exit 1
+          fi
 
           ARCHIVE_LIST="$RUNNER_TEMP/package-contents.txt"
           unzip -Z1 "$PACKAGE_NAME" > "$ARCHIVE_LIST"
 
           if grep -Eq '(^|/)\.git(/|$)' "$ARCHIVE_LIST"; then
             echo "Package contains Git metadata; refusing to publish it." >&2
+            exit 1
+          fi
+
+          PACKAGED_MANIFEST="$RUNNER_TEMP/packaged-manifest.yaml"
+          if ! unzip -p "$PACKAGE_NAME" manifest.yaml > "$PACKAGED_MANIFEST"; then
+            echo "Unable to extract packaged manifest.yaml." >&2
+            exit 1
+          fi
+
+          PACKAGED_PLUGIN_NAME="$(awk '$1 == "name:" && $0 !~ /^[[:space:]]/ { print $2; exit }' "$PACKAGED_MANIFEST")"
+          PACKAGED_VERSION="$(awk '$1 == "version:" && $0 !~ /^[[:space:]]/ { print $2; exit }' "$PACKAGED_MANIFEST")"
+          PACKAGED_AUTHOR="$(awk '$1 == "author:" && $0 !~ /^[[:space:]]/ { print $2; exit }' "$PACKAGED_MANIFEST")"
+
+          if [ "$PACKAGED_PLUGIN_NAME" != "$PLUGIN_NAME" ] || [ "$PACKAGED_VERSION" != "$VERSION" ] || [ "$PACKAGED_AUTHOR" != "$AUTHOR" ]; then
+            echo "Packaged manifest does not match the validated source manifest." >&2
             exit 1
           fi
 
