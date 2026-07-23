@@ -45,36 +45,33 @@ class EmbeddingClient(Tool):
     """
 
     def _invoke(self, tool_parameters: dict[str, Any]) -> Generator[ToolInvokeMessage, None, None]:
-
         embedding_model_config = tool_parameters.get("embedding_model_config")
         input_text: Union[str, List[str]] = tool_parameters.get("input_text")
         batch_size: int = tool_parameters.get("batch_size") or 10
 
         if not input_text:
-            # yield self.create_text_message("❌ 缺少 input_text 参数")
-            yield self.create_text_message("❌ Missing 'input_text' parameter")
-            return
+            raise ValueError("Missing 'input_text' parameter")
 
-        try:
-            # ✅ 自动识别单文本或 JSON 数组字符串
-            input_text = _parse_input_text(input_text)
+        input_text = _parse_input_text(input_text)
+        results: List[List[float]] = []
 
-            results: List[List[float]] = []
+        for batch in chunked(input_text, batch_size):
+            model_config = TextEmbeddingModelConfig(**embedding_model_config)
+            response = self.session.model.text_embedding.invoke(model_config=model_config, texts=batch)
 
-            for batch in chunked(input_text, batch_size):
-                model_config = TextEmbeddingModelConfig(**embedding_model_config)
-                response = self.session.model.text_embedding.invoke(model_config=model_config, texts=batch)
+            if not hasattr(response, "embeddings"):
+                raise RuntimeError("Embedding service response is missing the 'embeddings' field")
+            if len(response.embeddings) != len(batch):
+                raise RuntimeError(
+                    f"Embedding service returned {len(response.embeddings)} embeddings "
+                    f"for {len(batch)} texts"
+                )
 
-                if not hasattr(response, "embeddings"):
-                    # yield self.create_text_message("❌ embedding 服务未返回 embeddings 字段")
-                    yield self.create_text_message("❌ Embedding service did not return the 'embeddings' field")
-                    return
-                results.extend(response.embeddings)
+            results.extend(response.embeddings)
 
-            yield self.create_json_message({
-                "vector": results
-            })
+        if not results:
+            raise RuntimeError("Embedding service returned no embeddings")
 
-        except Exception as e:
-            # yield self.create_text_message(f"调用 embedding 服务失败: {str(e)}")
-            yield self.create_text_message(f"Failed to call embedding service: {str(e)}")
+        yield self.create_json_message({
+            "vector": results
+        })
